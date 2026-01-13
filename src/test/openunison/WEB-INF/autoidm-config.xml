@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tns:tremoloConfig xmlns:tns="http://www.tremolosecurity.com/tremoloConfig" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.tremolosecurity.com/tremoloConfig ../../../../dist/xml/tremoloConfig.xsd ">
+  <tns:applications>
+    
+      
+    
+    
+  </tns:applications>
+  <tns:myvdConfig>#[user.dir]/src/test/openunison/WEB-INF/myvd.conf</tns:myvdConfig>
+  <tns:authMechs>
+  	<tns:mechanism name="loginForm">
+  		<tns:uri>/auth/formLogin</tns:uri>
+  		<tns:className>com.tremolosecurity.proxy.auth.FormLoginAuthMech</tns:className>
+  		<tns:init>
+  		</tns:init>
+  		<tns:params>
+  			<tns:param>FORMLOGIN_JSP</tns:param>
+  		</tns:params>
+  	</tns:mechanism>
+  </tns:authMechs>
+  <tns:authChains>
+  	<tns:chain name="formlogin" level="1">
+  		<tns:authMech>
+  			<tns:name>loginForm</tns:name>
+  			<tns:required>required</tns:required>
+  			<tns:params>
+  				<tns:param name="FORMLOGIN_JSP" value="/auth/forms/defaultForm.jsp"/>
+  			</tns:params>
+  		</tns:authMech>
+  	</tns:chain>
+  </tns:authChains>
+  <tns:resultGroups>
+	
+  </tns:resultGroups>   
+  <tns:keyStorePath>#[user.dir]/src/test/openunison/WEB-INF/autoIdmSession.jks</tns:keyStorePath>
+ <tns:keyStorePassword>start123</tns:keyStorePassword>
+</tns:tremoloConfig>

@@ -1,0 +1,484 @@
+apiVersion: openunison.tremolo.io/v1
+kind: Target
+metadata:
+  name: custom-target
+  namespace: openunison
+spec:
+  className: com.tremolosecurity.provisioning.core.providers.JavaScriptTarget
+  params:
+    # configuration options for your target, NOT SECRETS
+    - name: name
+      value: "#[value]"
+    
+    # begin building your target
+    
+    # mark "true" for production, but during development is can be useful
+    # to make this "false" so you can develop one function at a time
+    - name: requireAllFunctions
+      value: "true"
+
+    # "true" if you want to enable looking up users by
+    # more then a unique id, required for the SCIM 2.0 Gateway
+    - name: enableUserLookups
+      value: "true"
+
+    # define your target
+    - name: javaScript
+      value: |-
+        // Imports into JavaScript, see https://www.graalvm.org/latest/reference-manual/js/JavaInteroperability/#access-java-from-javascript
+        System = Java.type("java.lang.System");
+        HttpClient = Java.type("java.net.http.HttpClient");
+        HttpRequest = Java.type("java.net.http.HttpRequest");
+        URI = Java.type("java.net.URI");
+        String = Java.type("java.lang.String");
+        HttpResponse = Java.type("java.net.http.HttpResponse");
+        User = Java.type("com.tremolosecurity.provisioning.core.User");
+        Group = Java.type("com.tremolosecurity.provisioning.core.Group");
+        Attribute = Java.type("com.tremolosecurity.saml.Attribute");
+        HashSet = Java.type("java.util.HashSet");
+        HashMap = Java.type("java.util.HashMap");
+        ProvisioningUtil = Java.type("com.tremolosecurity.provisioning.core.ProvisioningUtil");
+        ArrayList = Java.type("java.util.ArrayList");
+        Filter = Java.type("net.sourceforge.myvd.types.Filter");
+        GlobalEntries = Java.type("com.tremolosecurity.server.GlobalEntries");
+        URLEncoder = Java.type("java.net.URLEncoder");
+        BasicDB = Java.type("com.tremolosecurity.provisioning.core.providers.BasicDB");
+        StringBuffer = Java.type("java.lang.StringBuffer");
+        JSUtils = Java.type("com.tremolosecurity.util.JSUtils");
+        Logger = Java.type("org.apache.log4j.Logger")
+        Filter = Java.type("net.sourceforge.myvd.types.Filter");
+
+        
+        // initialize our target
+        function init(cfg, cfgMgr, name) {
+          // load configuration parameters into the state vairable
+          // that is available to all functions
+
+          state.put("mycfg",cfg.get("name").getValues().get(0));
+          state.put("password",cfg.get("somepasswordname").getValues().get(0));
+          state.put("logger",Logger.getLogger("io.openunison.targets.custom-target"));
+          
+          // other initialization code
+
+          // create simple local db for testing
+          user = {
+            "username": "mmosley",
+            "first": "Matt",
+            "last": "Mosley",
+            "email": "mmosley@nodomain.io",
+            "groups": ["group1","group2","group3"]
+          };
+
+          db = {
+            "mmosley": user
+          };
+
+          state.put("db",JSON.stringify(db));
+
+          
+        
+        }
+        
+        
+        
+        
+
+        //search for a user based on their login id
+        function findUser(userID, attributes, request) {
+          // get the logger
+          const logger = state.get("logger");
+
+          logger.info("In find user");
+
+          // find our user
+          const db = JSON.parse(state.get("db"));
+          const user = db[userID];
+
+          logger.info("user: " + JSON.stringify(user));
+
+          if (! user) {
+            logger.info("No user found");
+            return null;
+          }
+
+          // construct a User object
+          const userToReturn = new User(userID);
+          logger.info("Returning user with attributes " + attributes);
+          attributes.forEach(attrName => {
+            
+            val = user[attrName];
+            if (val) {
+              attr = new Attribute(attrName,val);
+              userToReturn.getAttribs().put(attrName,attr);
+            }
+          });
+
+          if (user["groups"]) {
+            userToReturn.getGroups().addAll(user["groups"]);
+          }
+
+          return userToReturn;
+
+
+          
+          
+        }
+        
+        // create a new user
+        function createUser(user,attributes,request) {
+          
+          // load data needed for the audit logs
+          approvalID = 0;
+          if (request.containsKey("APPROVAL_ID")) {
+            approvalID = request.get("APPROVAL_ID");
+          }
+            
+          workflow = request.get("WORKFLOW");
+        
+          cfgMgr = state.get("cfgMgr");
+          name = state.get("name");
+          
+          // begin creating the user
+          const newUser = {"username" : user.getUserID()};
+
+          
+
+          attributes.forEach(attrName => {
+            const attr = user.getAttribs().get(attrName);
+            if (attr) {
+              newUser[attrName] = attr.getValues().get(0);
+            }
+          });
+
+          newUser["groups"] = [];
+          user.getGroups().forEach(groupName => {newUser["groups"].push(groupName)});
+
+          // find our user
+          const db = JSON.parse(state.get("db"));
+          db[newUser["username"]] = newUser;
+          state.put("db",JSON.stringify(db));
+
+          // with the user created, now log what was created
+          
+          // log creating the new object being created
+          cfgMgr.getProvisioningEngine().logAction(name,true, ProvisioningUtil.ActionType.Add,  approvalID, workflow, "username", user.getUserID());
+          
+          attributes.forEach(attrName => {
+            const attr = user.getAttribs().get("attrName");
+            if (attr) {
+              // log the attribute
+              cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Add,  approvalID, workflow, attrname, user.getAttribs().get(attrname).getValues().get(0));
+            }
+          });
+          
+          // log the groups
+          user.getGroups().forEach(groupName => {
+            cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Add,  approvalID, workflow, "groups", groupName);
+          });
+          
+        }
+        
+        // delete the user
+        function deleteUser(user,request) {
+          // get the logger
+          const logger = state.get("logger");
+          
+          // get the db
+          const db = JSON.parse(state.get("db"));
+          const userFromDb = db[user.getUserID()];
+          if (! userFromDb) {
+            logger.warn("User " + user.getUserID() + " does not exist");
+            return;
+          }
+
+          delete db[user.getUserID()];
+          state.put("db",JSON.stringify(db));
+
+          // log the change
+        
+          approvalID = 0;
+          if (request.containsKey("APPROVAL_ID")) {
+            approvalID = request.get("APPROVAL_ID");
+          }
+        
+          workflow = request.get("WORKFLOW");
+        
+          cfgMgr = state.get("cfgMgr");
+          name = state.get("name");
+          cfgMgr.getProvisioningEngine().logAction(name,true, ProvisioningUtil.ActionType.Delete,  approvalID, workflow, "username", user.getUserID());
+        }
+        
+
+        // synchronize the user to our target. if the user doesn't exist, create them
+        function syncUser(user,addOnly,attributes,request) {
+          // check to see if the user exists
+          fromDb = findUser(user.getUserID(),attributes,request);
+          if (fromDb == null) {
+            // the user doesn't exist, create the user
+            createUser(user,attributes,request);
+            return;
+          }
+        
+
+
+          userToUpdate = {};
+          
+          // check for changes
+          attributes.forEach(attrName => {
+            attrFromUser = user.getAttribs().get(attrName);
+            attrFromDb = fromDb.getAttribs().get(attrName);
+        
+            
+        
+
+            if (attrFromUser != null && attrFromDb != null && attrFromUser.getValues().get(0) != attrFromDb.getValues().get(0) ) {
+              // values different, add to payload
+              userToUpdate[attrName] = attrFromUser.getValues().get(0);
+            } else if (attrFromUser == null && attrFromDb != null && !addOnly) {
+              // remove the attribute
+              userToUpdate[attrName] = "";
+            } else if (attrFromUser != null && attrFromDb == null) {
+              // add the attribute
+              userToUpdate[attrName] = attrFromUser.getValues().get(0);
+            }
+          });
+
+          // determine changes in groups
+          const groupsToAdd = [];
+          const groupsToRemove = [];
+          user.getGroups().forEach(groupName => {
+            if (! fromDb.getGroups().contains(groupName)) {
+              // group doesn't exist in the current user, add
+              groupsToAdd.push(groupName);
+            }
+          });
+
+          fromDb.getGroups().forEach(groupName => {
+            if (! user.getGroups().contains(groupName)) {
+              // group no longer exists in updated user, remove
+              groupsToRemove.push(groupName);
+            }
+          });
+        
+
+          // with changes determined, write them
+          const db = JSON.parse(state.get("db"));
+          const updateUser = db[user.getUserID()];
+          Object.entries(userToUpdate).forEach(([key,val]) => {
+            updateUser[key] = val;
+          });
+          updateUser["groups"] = [];
+          user.getGroups().forEach(groupName => updateUser["groups"].push(groupName));
+          db[user.getUserID()] = updateUser;
+          state.put("db",JSON.stringify(db));
+          
+          // log changes
+          approvalID = 0;
+          if (request.containsKey("APPROVAL_ID")) {
+            approvalID = request.get("APPROVAL_ID");
+          }
+        
+          workflow = request.get("WORKFLOW");
+        
+          cfgMgr = state.get("cfgMgr");
+          name = state.get("name");
+        
+          Object.entries(userToUpdate).forEach(([key,val]) => {
+            
+            if (val == "") {
+              cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Delete,  approvalID, workflow, key, "");
+            } else {
+              cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Replace,  approvalID, workflow, key, val);
+            }
+        
+          });
+
+          groupsToAdd.forEach(groupName => {
+            cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Add,  approvalID, workflow, "group", groupName);
+          });
+
+          groupsToRemove.forEach(groupName => {
+            cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Delete,  approvalID, workflow, "group", groupName);
+          });
+        
+          
+          
+          
+        }
+
+        // if your target supports passwords, implement this function
+        function setUserPassword(user,request) {
+        
+        }
+
+        // perform any shutdown logic such as closing connection pools
+        function shutdown() {
+        
+        }
+
+        // these functions are required if this target is used with the SCIM 2.0 Gateway
+
+        // lookup a user by their login name / user name
+        function lookupUserByLogin(login) {
+          // pre-load which attributes you want to return
+          attributes = new HashSet();
+          attributes.add("username");
+          attributes.add("first");
+          attributes.add("last");
+          attributes.add("email");
+        
+          // you can create your own lookup and translate to a User object or piggy back off
+          // of the existing findUser
+          return findUser(login,attributes, new HashMap());
+  
+        }
+        
+        // lookup a user by their unique id, this may be different then a username
+        // for instance, it is often a Type IV UUID or a randomly assigned number
+        function lookupUserById(id) {
+          // our store doesn't support a separate unique id, just do a lookup by username
+          return lookupUserByLogin(id);
+        }
+
+        // search for a user with more then their userid.  
+        // How much is supported will be based on your target's capabilities and your applications needs. 
+        function searchUsers(ldapFilter) {
+          // pre-load which attributes you want to return
+          attributes = new HashSet();
+          attributes.add("username");
+          attributes.add("first");
+          attributes.add("last");
+          attributes.add("email");
+
+          const db = JSON.parse(state.get("db"));
+
+          searchRes = new ArrayList();
+
+          const attrNames = ["username","first","last","email"];
+          
+          Object.entries(db).forEach( ([username,user]) => {
+            const userFromTarget = findUser(username,attributes,new HashMap());
+            if (JSUtils.checkUserAgainstFilter(userFromTarget,"groups",ldapFilter)) {
+              searchRes.add(userFromTarget);
+            }
+          } );
+
+          
+          
+          
+          return searchRes;
+        }
+
+        // search for a group by its name
+        // NOTE: if your groups don't have unique ids, but your users do, then
+        // you should 
+        function lookupGroupByName(name) {
+          // we're not storing groups individually so this is a "virtual" group
+          group = new Group(name,"",name);
+
+          const db = JSON.parse(state.get("db"));
+          // our groups are multi value attributes, so we'll need to build it from
+          // iteration.  Hopefully your store is more efficient
+          Object.entries(db).forEach(([username,user]) => {
+            const groups = user["groups"];
+            groups.forEach(groupname => {
+              if (groupname == name) {
+                group.getMembers().add(username);
+              }
+            });
+          });
+
+          if (group.getMembers().size() == 0) {
+            return null;
+          } else {
+            return group;
+          }
+
+          
+
+
+        }
+        
+        // search for a group by unique id
+        function lookupGroupById(id) {
+          // we don't have a separate unique id
+          return lookupGroupByName(id);
+        }
+        
+        
+        
+        
+        // true if the members returned by lookupGroupById/lookupGroupByName are unique ids
+        // false if the members are user names/logins
+        function isGroupMembersUniqueIds() {
+          return false;
+        }
+
+
+        // true if users have a unique id separate from the user's login/user name
+        function isUniqueIdTremoloId() {
+          return false;
+        }
+        
+        // true if groups have a unique id separate from the group's name
+        function isGroupIdUniqueId() {
+          return false;
+        }
+        
+        
+        
+        
+        
+        function searchGroups(ldapFilter) {
+
+          const searchRes = new ArrayList();
+          
+          const db = JSON.parse(state.get("db"));
+
+          const groupsChecked = {};
+          
+          Object.entries(db).forEach( ([username,user]) => {
+            
+            user["groups"].forEach(groupName => {
+              if (! groupsChecked[groupName]) {
+                groupsChecked[groupName] = "x";
+
+                const group = lookupGroupByName(groupName);
+                if (JSUtils.checkGroupAgainstFilter(group,ldapFilter)) {
+                  searchRes.add(group);
+                }
+              }
+            });
+            
+          } );
+          
+          
+          
+          return searchRes;
+        }
+        
+        
+        
+
+
+  secretParams:
+    - name: somepasswordname
+      secretName: orchestra-secrets-source
+      secretKey: kcpassword
+  targetAttributes:
+    - name: username
+      source: username
+      sourceType: user
+    - name: id
+      source: id
+      sourceType: user
+    - name: firstName
+      source: firstName
+      sourceType: user
+    - name: lastName
+      source: lastName
+      sourceType: user
+    - name: email
+      source: email
+      sourceType: user
+

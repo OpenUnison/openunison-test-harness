@@ -1,0 +1,34 @@
+<?xml version="1.0"?>    
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+         version="2.4">
+   
+
+  <filter>
+	<filter-name>embeddedSP</filter-name>
+	<filter-class>com.tremolosecurity.embedd.EmbeddedSP</filter-class>
+<init-param>
+		<param-name>mode</param-name>
+		<param-value>appliance</param-value>
+	</init-param>
+	<init-param>
+		<param-name>userPrincipalAttribute</param-name>
+		<param-value>uid</param-value>
+	</init-param>
+	<init-param>
+		<param-name>roleAttribute</param-name>
+		<param-value>roles</param-value>
+	</init-param>
+
+  </filter> 
+
+
+
+
+ <filter-mapping>
+	<filter-name>embeddedSP</filter-name>
+	<url-pattern>/*</url-pattern>
+  </filter-mapping>
+
+</web-app>
