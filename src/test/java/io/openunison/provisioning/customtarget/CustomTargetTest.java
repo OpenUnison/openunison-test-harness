@@ -312,6 +312,14 @@ class CustomTargetTest {
 
         User user = users.get(0);
         validateUser(user, "mmosley","Matt","Mosley","mmosley@nodomain.io","group1","group2","group3");
+
+        // test a search that will return all users
+        users = jstarget.searchUsers("(&(objectClass=inetOrgPerson)(username=*))");
+        
+        assertEquals(1,users.size());
+
+        user = users.get(0);
+        validateUser(user, "mmosley","Matt","Mosley","mmosley@nodomain.io","group1","group2","group3");
     }
 
     @Test
@@ -334,6 +342,29 @@ class CustomTargetTest {
         assertTrue(group2.getMembers().contains("mmosley"));
 
         Group group3 = groups.get(2);
+        assertNotNull(group3);
+        assertEquals("group3",group3.getName());
+        assertEquals(1,group3.getMembers().size());
+        assertTrue(group3.getMembers().contains("mmosley"));
+
+        // check for a search of all groups
+        groups = jstarget.searchGroups("(&(objectClass=groupOfUniqueNames)(cn=*))");
+
+        assertEquals(3, groups.size());
+
+        group1 = groups.get(0);
+        assertNotNull(group1);
+        assertEquals("group1",group1.getName());
+        assertEquals(1,group1.getMembers().size());
+        assertTrue(group1.getMembers().contains("mmosley"));
+
+        group2 = groups.get(1);
+        assertNotNull(group2);
+        assertEquals("group2",group2.getName());
+        assertEquals(1,group2.getMembers().size());
+        assertTrue(group2.getMembers().contains("mmosley"));
+
+        group3 = groups.get(2);
         assertNotNull(group3);
         assertEquals("group3",group3.getName());
         assertEquals(1,group3.getMembers().size());
