@@ -164,10 +164,10 @@ spec:
           cfgMgr.getProvisioningEngine().logAction(name,true, ProvisioningUtil.ActionType.Add,  approvalID, workflow, "username", user.getUserID());
           
           attributes.forEach(attrName => {
-            const attr = user.getAttribs().get("attrName");
+            const attr = user.getAttribs().get(attrName);
             if (attr) {
               // log the attribute
-              cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Add,  approvalID, workflow, attrname, user.getAttribs().get(attrname).getValues().get(0));
+              cfgMgr.getProvisioningEngine().logAction(name,false, ProvisioningUtil.ActionType.Add,  approvalID, workflow, attrName, user.getAttribs().get(attrName).getValues().get(0));
             }
           });
           
@@ -343,6 +343,7 @@ spec:
         // search for a user with more then their userid.  
         // How much is supported will be based on your target's capabilities and your applications needs. 
         function searchUsers(ldapFilter) {
+          
           // pre-load which attributes you want to return
           attributes = new HashSet();
           attributes.add("username");
@@ -408,20 +409,18 @@ spec:
         
         
         
-        // true if the members returned by lookupGroupById/lookupGroupByName are unique ids
-        // false if the members are user names/logins
-        function isGroupMembersUniqueIds() {
-          return false;
-        }
-
-
-        // true if users have a unique id separate from the user's login/user name
+        // true if the user's unique id and username/login id are the same, false if there is a unique id
+        // that is in a separate attribute
         function isUniqueIdTremoloId() {
-          return false;
+          return true;
         }
         
         // true if groups have a unique id separate from the group's name
         function isGroupIdUniqueId() {
+          return true;
+        }
+
+        function isGroupMembersUniqueIds() {
           return false;
         }
         
@@ -430,7 +429,7 @@ spec:
         
         
         function searchGroups(ldapFilter) {
-
+          
           const searchRes = new ArrayList();
           
           const db = JSON.parse(state.get("db"));
@@ -464,19 +463,16 @@ spec:
   secretParams:
     - name: somepasswordname
       secretName: orchestra-secrets-source
-      secretKey: kcpassword
+      secretKey: name
   targetAttributes:
     - name: username
       source: username
       sourceType: user
-    - name: id
-      source: id
+    - name: first
+      source: first
       sourceType: user
-    - name: firstName
-      source: firstName
-      sourceType: user
-    - name: lastName
-      source: lastName
+    - name: last
+      source: last
       sourceType: user
     - name: email
       source: email
